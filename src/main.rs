@@ -4,6 +4,27 @@ use std::{
     net::{TcpListener, TcpStream},
 };
 
+enum Status {
+    Ok,
+    NotFound
+}
+
+fn generate_response_content(status: Status, file: &str) -> String {
+    let status_line = match status {
+        Status::Ok => "HTTP/1.1 200 OK",
+        _ => "HTTP/1.1 404 NOT FOUND"
+    };
+
+    let content = fs::read_to_string(file).unwrap();
+
+    let content_length = content.len();
+
+    let response = 
+        format!("{status_line}\r\nContent-Length:{content_length}\r\n\r\n{content}");
+
+    response
+}
+
 fn handle_stream(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&mut stream);
 
@@ -15,20 +36,20 @@ fn handle_stream(mut stream: TcpStream) {
 
     println!("Request: {:#?}", http_request);
 
-    let status_line = "HTTP/1.1 200 OK";
-    
-    let content = fs::read_to_string("hello.html").unwrap();
+    let (status, file) = match http_request[0].as_str() {
+        "GET / HTTP/1.1" => (Status::Ok, "hello.html"),
+        _ => (Status::NotFound, "404.html")
+    };
 
-    let content_length = content.len();
-
-    let response = 
-        format!("{status_line}\r\nContent-Length:{content_length}\r\n\r\n{content}");
+    let response = generate_response_content(status, file);
 
     stream.write_all(response.as_bytes()).unwrap();
 }
 
 fn main() {
-    let listener = TcpListener::bind("127.0.0.1:80").unwrap();
+    const LISTEN_ADDRESS: &str = "127.0.0.1:80";
+
+    let listener = TcpListener::bind(LISTEN_ADDRESS).unwrap();
 
     for stream in listener.incoming() {
         // iterating on incoming is like calling accept on a loop
