@@ -2,6 +2,8 @@ use std::{
     fs,
     io::{prelude::*, BufReader},
     net::{TcpListener, TcpStream},
+    thread,
+    time::Duration
 };
 
 enum Status {
@@ -38,6 +40,10 @@ fn handle_stream(mut stream: TcpStream) {
 
     let (status, file) = match http_request[0].as_str() {
         "GET / HTTP/1.1" => (Status::Ok, "hello.html"),
+        "GET /sleep HTTP/1.1" => {
+            thread::sleep(Duration::from_secs(5));
+            (Status::Ok, "hello.html")
+        },
         _ => (Status::NotFound, "404.html")
     };
 
