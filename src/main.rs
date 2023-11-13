@@ -173,11 +173,11 @@ fn main() {
 
     let listener = TcpListener::bind(LISTEN_ADDRESS).unwrap();
 
+    let thread_pool = ThreadPool::new(5);
+
     for stream in listener.incoming() {
         // iterating on incoming is like calling accept on a loop
         let active_stream = stream.unwrap();
-
-        let thread_pool = ThreadPool::new(5);
 
         thread_pool.execute(|| handle_stream(active_stream));
 
