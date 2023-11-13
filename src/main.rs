@@ -4,6 +4,7 @@ use std::{
     net::{TcpListener, TcpStream},
     thread,
     time::Duration,
+    sync::{mpsc, Mutex, Arc}
 };
 
 enum Status {
@@ -126,6 +127,47 @@ fn handle_stream(mut stream: TcpStream) {
     }
 }
 
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
+struct ThreadPool {
+    //n_threads: usize,
+    sender: mpsc::Sender<Job>
+}
+
+impl ThreadPool {
+    fn new(n_threads: usize) -> ThreadPool {
+        let (sender, receiver) = mpsc::channel::<Job>();
+        
+        let shared_mutex_receiver = Arc::new(Mutex::new(receiver));
+
+        for i in 0..=n_threads {
+            // MPSC: Multiple Producer, Single Receiver
+            // So we have to share the receiver, we use the patter of the book: Arc of a Mutex
+
+            let rx_mutex = shared_mutex_receiver.clone();
+            
+            thread::spawn(move || {
+                loop {
+                    // receive is blocking so the thread will wait for a Job
+                    let rx = rx_mutex.lock().unwrap();
+
+                    let f = rx.recv().unwrap();
+                    println!("Worker: {} received a Job, executing it", i);
+                    f();
+                }
+            });
+        }
+
+        ThreadPool { sender }
+    }
+
+    fn execute<F>(&self, f: F) 
+    where F: FnOnce() + Send + 'static {
+        self.sender.send(Box::new(f)).unwrap();
+    }
+
+}
+
 fn main() {
     const LISTEN_ADDRESS: &str = "0.0.0.0:80";
 
@@ -135,8 +177,12 @@ fn main() {
         // iterating on incoming is like calling accept on a loop
         let active_stream = stream.unwrap();
 
-        thread::spawn(|| {
-            handle_stream(active_stream);
-        });
+        let thread_pool = ThreadPool::new(5);
+
+        thread_pool.execute(|| handle_stream(active_stream));
+
+        // thread::spawn(|| {
+        //     handle_stream(active_stream);
+        // });
     }
 }
