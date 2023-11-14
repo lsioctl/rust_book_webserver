@@ -150,16 +150,17 @@ impl ThreadPool {
             thread::spawn(move || {
                 loop {
                     // receive is blocking so the thread will wait for a Job
-                    // Note: I think this could be a problem as the following code
-                    // won't work as expected:
-                    // let rx = rx_mutex.lock().unwrap();
-                    // let f = rx.recv().unwrap();
+                    let rx = rx_mutex.lock().unwrap();
+                    let f = rx.recv().unwrap();
                     // because of the lifetime of rx (MutexGuard), the lock will be kept until the
                     // end of the scope (so after f is executed) and rx is destroyed
-                    // so we have to do something like this to benefit from the fact that the temporaries
+                    // so we could do something like this to benefit from the fact that the temporaries
                     // on the rhs are dropped after the let statement
-                    // TODO: what if we want to do something else than unwrap ?
-                    let f = rx_mutex.lock().unwrap().recv().unwrap();
+                    // let f = rx_mutex.lock().unwrap().recv().unwrap();
+                    // but I prefer doing 'as if' it was real code, and we would like to do more
+                    // complicated things than unwrap()
+                    // release the lock so other threads handle the jobs
+                    drop(rx);
                     println!("Worker: {} received a Job, executing it", i);
                     f();
                 }
