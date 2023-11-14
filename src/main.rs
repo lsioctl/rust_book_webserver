@@ -127,6 +127,7 @@ fn handle_stream(mut stream: TcpStream) {
     }
 }
 
+// TODO: is trait object needed or could I just use function pointers ?
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
 struct ThreadPool {
@@ -140,7 +141,7 @@ impl ThreadPool {
         
         let shared_mutex_receiver = Arc::new(Mutex::new(receiver));
 
-        for i in 0..=n_threads {
+        for i in 0..n_threads {
             // MPSC: Multiple Producer, Single Receiver
             // So we have to share the receiver, we use the patter of the book: Arc of a Mutex
 
@@ -149,9 +150,16 @@ impl ThreadPool {
             thread::spawn(move || {
                 loop {
                     // receive is blocking so the thread will wait for a Job
-                    let rx = rx_mutex.lock().unwrap();
-
-                    let f = rx.recv().unwrap();
+                    // Note: I think this could be a problem as the following code
+                    // won't work as expected:
+                    // let rx = rx_mutex.lock().unwrap();
+                    // let f = rx.recv().unwrap();
+                    // because of the lifetime of rx (MutexGuard), the lock will be kept until the
+                    // end of the scope (so after f is executed) and rx is destroyed
+                    // so we have to do something like this to benefit from the fact that the temporaries
+                    // on the rhs are dropped after the let statement
+                    // TODO: what if we want to do something else than unwrap ?
+                    let f = rx_mutex.lock().unwrap().recv().unwrap();
                     println!("Worker: {} received a Job, executing it", i);
                     f();
                 }
